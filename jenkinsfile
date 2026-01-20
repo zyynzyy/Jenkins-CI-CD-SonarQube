@@ -52,6 +52,8 @@ pipeline {
         success {
             script {
                 def leadTime = DEPLOY_END - PIPELINE_START
+                echo "Pipepine Start = $(pipeline_start)
+                echo "Pipepine Start = $(deploy_end)
                 echo "📊 Lead Time for Change (ms): ${leadTime}"
                 echo "✅ Deployment SUCCESS (counted in DORA metric)"
             }
