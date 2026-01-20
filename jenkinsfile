@@ -53,6 +53,14 @@ post {
         script {
             def leadTime = DEPLOY_END - PIPELINE_START
 
+            def logLine = "${env.BUILD_NUMBER},${leadTime}\n"
+
+            writeFile file: 'leadtime.csv',
+                      text: logLine,
+                      append: true
+
+            archiveArtifacts artifacts: 'leadtime.csv', fingerprint: true
+
             echo "Pipeline Start Time (ms) = ${PIPELINE_START}"
             echo "Deploy End Time (ms)    = ${DEPLOY_END}"
             echo "📊 Lead Time for Change (ms): ${leadTime}"
