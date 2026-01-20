@@ -1,69 +1,43 @@
 pipeline {
     agent any
 
-    options {
-        timestamps()
-    }
-
     stages {
-
-        stage('Pull Source Code') {
+        stage('Build') {
             steps {
-                echo "Pulling source code from GitHub"
-                checkout scm
-            }
-        }
-
-        stage('Update Server') {
-            steps {
-                echo "Running apt update"
+                echo 'Building application'
                 sh '''
-                    sudo apt update
+                  mkdir -p build
+                  cp -r index assets vendor build/
                 '''
             }
         }
 
-        stage('Install Nginx') {
+        stage('Test') {
             steps {
-                echo "Installing nginx"
+                echo 'Running tests'
                 sh '''
-                    if ! command -v nginx > /dev/null; then
-                        sudo apt install nginx -y
-                    else
-                        echo "Nginx already installed"
-                    fi
+                  test -f build/index || exit 1
                 '''
             }
         }
 
-       stage('Deploy Website to Nginx') {
-    steps {
-        echo "Deploying static website to nginx"
-        sh '''
-            echo "Workspace content:"
-            ls -lah
-
-            sudo rm -rf /var/www/html/*
-
-            sudo cp index.html /var/www/html/
-            sudo cp -r assets vendor /var/www/html/
-
-            sudo chown -R www-data:www-data /var/www/html
-            sudo chmod -R 755 /var/www/html
-
-            sudo systemctl reload nginx
-        '''
-    }
-}
-
+        stage('Deploy') {
+            steps {
+                echo 'Deploying to Nginx'
+                sh '''
+                  sudo rm -rf /var/www/html/*
+                  sudo cp -r build/* /var/www/html/
+                '''
+            }
+        }
     }
 
     post {
         success {
-            echo "✅ Deployment SUCCESS - Website is live on Nginx"
+            echo '✅ Build, Test, Deploy SUCCESS'
         }
         failure {
-            echo "❌ Deployment FAILED"
+            echo '❌ Pipeline FAILED'
         }
     }
 }
