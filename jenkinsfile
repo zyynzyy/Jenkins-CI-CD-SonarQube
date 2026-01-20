@@ -1,19 +1,17 @@
+def SOURCE_TIME = 0
+def DEPLOY_END  = 0
+
 pipeline {
     agent any
-
-    environment {
-        SOURCE_TIME = ""
-        DEPLOY_END  = ""
-    }
 
     stages {
 
         stage('Source') {
             steps {
                 script {
-                    env.SOURCE_TIME = System.currentTimeMillis()
+                    SOURCE_TIME = System.currentTimeMillis()
+                    echo "Source stage started at ${SOURCE_TIME}"
                 }
-                echo "Source stage started at ${env.SOURCE_TIME}"
             }
         }
 
@@ -22,7 +20,7 @@ pipeline {
                 sh '''
                   echo "Building artifact..."
                   mkdir -p build
-                  cp -r website/* build/
+                  cp -r index.html assets vendor build/
                 '''
             }
         }
@@ -44,7 +42,7 @@ pipeline {
                   sudo cp -r build/* /var/www/html/
                 '''
                 script {
-                    env.DEPLOY_END = System.currentTimeMillis()
+                    DEPLOY_END = System.currentTimeMillis()
                 }
             }
         }
@@ -53,14 +51,14 @@ pipeline {
     post {
         success {
             script {
-                def leadTime = env.DEPLOY_END.toLong() - env.SOURCE_TIME.toLong()
+                def leadTime = DEPLOY_END - SOURCE_TIME
                 echo "📊 Lead Time for Change (ms): ${leadTime}"
-                echo "✅ Deployment SUCCESS (count as 1 deployment)"
+                echo "✅ Deployment SUCCESS (counted in DORA metric)"
             }
         }
 
         failure {
-            echo "❌ Pipeline FAILED – deployment not counted"
+            echo "❌ Pipeline FAILED – deployment NOT counted in DORA"
         }
     }
 }
