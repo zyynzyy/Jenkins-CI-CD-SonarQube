@@ -23,6 +23,14 @@ pipeline {
             }
         }
 
+        stage('Cloning Git Source') {
+            steps {
+                echo "Cloning Git Soorce"
+                sh '''
+                    git clone https://github.com/zyynzyy/Jenkins-CI-CD-SonarQube.git
+                '''
+            }
+        }
         stage('Install Nginx') {
             steps {
                 echo "Installing nginx"
