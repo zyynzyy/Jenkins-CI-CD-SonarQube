@@ -1,10 +1,6 @@
 pipeline {
     agent any
 
-    tools {
-        sonarRunner 'sonar-scanner'
-    }
-
     environment {
         PIPELINE_START = "${System.currentTimeMillis()}"
     }
@@ -19,7 +15,7 @@ pipeline {
 
         stage('Build') {
             steps {
-                echo "🔧 Building artifact..."
+                echo "🔧 Build stage"
                 sh '''
                   rm -rf build
                   mkdir -p build
@@ -30,12 +26,12 @@ pipeline {
 
         stage('Test - SonarCloud Analysis') {
             steps {
-                echo "🔍 Running SonarCloud analysis..."
+                echo "🔍 SonarCloud analysis"
                 withSonarQubeEnv('sonarcloud') {
                     sh '''
                       sonar-scanner \
-                        -Dsonar.projectKey=ZY_PROJECT_KEY \
-                        -Dsonar.organization=ZY_ORG_KEY \
+                        -Dsonar.projectKey=ISI_PROJECT_KEY \
+                        -Dsonar.organization=ISI_ORG_KEY \
                         -Dsonar.sources=.
                     '''
                 }
@@ -67,19 +63,19 @@ pipeline {
     post {
         success {
             script {
-                def leadTimeMs = DEPLOY_END.toLong() - PIPELINE_START.toLong()
+                def leadTimeMs  = DEPLOY_END.toLong() - PIPELINE_START.toLong()
                 def leadTimeSec = leadTimeMs / 1000
 
                 echo "📊 DORA METRIC"
-                echo "Pipeline Start  : ${PIPELINE_START}"
-                echo "Deploy End      : ${DEPLOY_END}"
-                echo "Lead Time (sec) : ${leadTimeSec}"
-                echo "✅ Deployment SUCCESS (COUNTED)"
+                echo "Pipeline Start : ${PIPELINE_START}"
+                echo "Deploy End     : ${DEPLOY_END}"
+                echo "Lead Time (s)  : ${leadTimeSec}"
+                echo "✅ SUCCESS – counted in DORA"
             }
         }
 
         failure {
-            echo "❌ Pipeline FAILED – NOT counted in DORA"
+            echo "❌ FAILED – not counted in DORA"
         }
     }
 }
