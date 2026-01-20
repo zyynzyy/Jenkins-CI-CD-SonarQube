@@ -23,14 +23,6 @@ pipeline {
             }
         }
 
-        stage('Cloning Git Source') {
-            steps {
-                echo "Cloning Git Soorce"
-                sh '''
-                    git clone https://github.com/zyynzyy/Jenkins-CI-CD-SonarQube.git
-                '''
-            }
-        }
         stage('Install Nginx') {
             steps {
                 echo "Installing nginx"
@@ -44,20 +36,26 @@ pipeline {
             }
         }
 
-        stage('Deploy Website to Nginx') {
-            steps {
-                echo "Deploying static website to nginx"
-                sh '''
-                    sudo rm -rf /var/www/html/*
-                    sudo cp -r index assets vendor /var/www/html/
+       stage('Deploy Website to Nginx') {
+    steps {
+        echo "Deploying static website to nginx"
+        sh '''
+            echo "Workspace content:"
+            ls -lah
 
-                    sudo chown -R www-data:www-data /var/www/html
-                    sudo chmod -R 755 /var/www/html
+            sudo rm -rf /var/www/html/*
 
-                    sudo systemctl restart nginx
-                '''
-            }
-        }
+            sudo cp index.html /var/www/html/
+            sudo cp -r assets vendor /var/www/html/
+
+            sudo chown -R www-data:www-data /var/www/html
+            sudo chmod -R 755 /var/www/html
+
+            sudo systemctl reload nginx
+        '''
+    }
+}
+
     }
 
     post {
