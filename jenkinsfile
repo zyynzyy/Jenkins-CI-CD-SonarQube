@@ -1,4 +1,4 @@
-def SOURCE_TIME = 0
+def PIPELINE_START = 0
 def DEPLOY_END  = 0
 
 pipeline {
@@ -9,8 +9,8 @@ pipeline {
         stage('Source') {
             steps {
                 script {
-                    SOURCE_TIME = System.currentTimeMillis()
-                    echo "Source stage started at ${SOURCE_TIME}"
+                    PIPELINE_START = System.currentTimeMillis()
+                    echo "Source stage started at ${PIPELINE_START}"
                 }
             }
         }
