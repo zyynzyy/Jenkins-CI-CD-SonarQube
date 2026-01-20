@@ -26,14 +26,16 @@ pipeline {
 
         stage('Test - SonarCloud Analysis') {
             steps {
-                echo "🔍 SonarCloud analysis"
-                withSonarQubeEnv('sonarcloud') {
-                    sh '''
-                      sonar-scanner \
-                        -Dsonar.projectKey=ISI_PROJECT_KEY \
-                        -Dsonar.organization=ISI_ORG_KEY \
-                        -Dsonar.sources=.
-                    '''
+                script {
+                    def scannerHome = tool 'sonar-scanner'
+                    withSonarQubeEnv('sonarcloud') {
+                        sh """
+                          ${scannerHome}/bin/sonar-scanner \
+                            -Dsonar.projectKey=ISI_PROJECT_KEY \
+                            -Dsonar.organization=ISI_ORG_KEY \
+                            -Dsonar.sources=.
+                        """
+                    }
                 }
             }
         }
@@ -51,7 +53,6 @@ pipeline {
                 script {
                     DEPLOY_END = System.currentTimeMillis()
                 }
-
                 sh '''
                   sudo rm -rf /var/www/html/*
                   sudo cp -r build/* /var/www/html/
