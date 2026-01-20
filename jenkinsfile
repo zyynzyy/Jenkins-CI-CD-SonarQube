@@ -48,19 +48,21 @@ pipeline {
         }
     }
 
-    post {
-        success {
-            script {
-                def leadTime = DEPLOY_END - PIPELINE_START
-                echo "Pipepine Start = $(pipeline_start)"
-                echo "Pipepine Start = $(deploy_end)"
-                echo "📊 Lead Time for Change (ms): ${leadTime}"
-                echo "✅ Deployment SUCCESS (counted in DORA metric)"
-            }
-        }
+post {
+    success {
+        script {
+            def leadTime = DEPLOY_END - PIPELINE_START
 
-        failure {
-            echo "❌ Pipeline FAILED – deployment NOT counted in DORA"
+            echo "Pipeline Start Time (ms) = ${PIPELINE_START}"
+            echo "Deploy End Time (ms)    = ${DEPLOY_END}"
+            echo "📊 Lead Time for Change (ms): ${leadTime}"
+            echo "✅ Deployment SUCCESS (counted in DORA metric)"
         }
     }
+
+    failure {
+        echo "❌ Pipeline FAILED – deployment NOT counted in DORA"
+    }
+}
+
 }
