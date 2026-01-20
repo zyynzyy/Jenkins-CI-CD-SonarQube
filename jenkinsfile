@@ -1,43 +1,78 @@
 pipeline {
     agent any
 
+    environment {
+        START_TIME = "${System.currentTimeMillis()}"
+    }
+
     stages {
+
+        stage('Source') {
+            steps {
+                script {
+                    env.SOURCE_TIME = System.currentTimeMillis()
+                }
+                echo "Source stage started at ${env.SOURCE_TIME}"
+            }
+        }
+
         stage('Build') {
             steps {
-                echo 'Building application'
+                script {
+                    env.BUILD_START = System.currentTimeMillis()
+                }
                 sh '''
                   mkdir -p build
                   cp -r index assets vendor build/
                 '''
+                script {
+                    env.BUILD_END = System.currentTimeMillis()
+                }
             }
         }
 
         stage('Test') {
             steps {
-                echo 'Running tests'
+                script {
+                    env.TEST_START = System.currentTimeMillis()
+                }
                 sh '''
                   test -f build/index || exit 1
                 '''
+                script {
+                    env.TEST_END = System.currentTimeMillis()
+                }
             }
         }
 
         stage('Deploy') {
             steps {
-                echo 'Deploying to Nginx'
+                script {
+                    env.DEPLOY_START = System.currentTimeMillis()
+                }
                 sh '''
                   sudo rm -rf /var/www/html/*
                   sudo cp -r build/* /var/www/html/
                 '''
+                script {
+                    env.DEPLOY_END = System.currentTimeMillis()
+                }
             }
         }
     }
 
     post {
+        always {
+            script {
+                def leadTime = env.DEPLOY_END.toLong() - env.SOURCE_TIME.toLong()
+                echo "📊 Lead Time for Change (ms): ${leadTime}"
+            }
+        }
         success {
-            echo '✅ Build, Test, Deploy SUCCESS'
+            echo "✅ Deployment SUCCESS (count this as 1 deployment)"
         }
         failure {
-            echo '❌ Pipeline FAILED'
+            echo "❌ Deployment FAILED (do NOT count)"
         }
     }
 }
