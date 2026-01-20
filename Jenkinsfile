@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     tools {
-        sonarQube 'sonar-scanner'
+        sonarRunner 'sonar-scanner'
     }
 
     environment {
@@ -32,14 +32,18 @@ pipeline {
             steps {
                 echo "🔍 Running SonarCloud analysis..."
                 withSonarQubeEnv('sonarcloud') {
-                    sh 'sonar-scanner'
+                    sh '''
+                      sonar-scanner \
+                        -Dsonar.projectKey=ZY_PROJECT_KEY \
+                        -Dsonar.organization=ZY_ORG_KEY \
+                        -Dsonar.sources=.
+                    '''
                 }
             }
         }
 
         stage('Quality Gate') {
             steps {
-                echo "🚦 Waiting for Quality Gate result..."
                 timeout(time: 5, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
@@ -49,18 +53,13 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    DEPLOY_START = System.currentTimeMillis()
+                    DEPLOY_END = System.currentTimeMillis()
                 }
 
-                echo "🚀 Deploying to Nginx..."
                 sh '''
                   sudo rm -rf /var/www/html/*
                   sudo cp -r build/* /var/www/html/
                 '''
-
-                script {
-                    DEPLOY_END = System.currentTimeMillis()
-                }
             }
         }
     }
@@ -80,7 +79,7 @@ pipeline {
         }
 
         failure {
-            echo "❌ Pipeline FAILED – deployment NOT counted in DORA"
+            echo "❌ Pipeline FAILED – NOT counted in DORA"
         }
     }
 }
