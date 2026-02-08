@@ -32,7 +32,7 @@ pipeline {
                         sh """
                           ${scannerHome}/bin/sonar-scanner \
                             -Dsonar.projectKey=ISI_PROJECT_KEY \
-                            -Dsonar.organization=ISI_ORG_KEY \
+                            -Dsonar.organization=zyynzyy\
                             -Dsonar.sources=.
                         """
                     }
