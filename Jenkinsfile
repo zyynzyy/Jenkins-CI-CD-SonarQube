@@ -51,7 +51,7 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                   def DEPLOY_END = System.currentTimeMillis()
+                   DEPLOY_END = System.currentTimeMillis()
                 }
                 sh '''
                   sudo rm -rf /var/www/html/*
