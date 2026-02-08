@@ -63,16 +63,8 @@ pipeline {
 
     post {
         success {
-            script {
-                def leadTimeMs  = DEPLOY_END.toLong() - PIPELINE_START.toLong()
-                def leadTimeSec = leadTimeMs / 1000
+            echo "Mantab"
 
-                echo "📊 DORA METRIC"
-                echo "Pipeline Start : ${PIPELINE_START}"
-                echo "Deploy End     : ${DEPLOY_END}"
-                echo "Lead Time (s)  : ${leadTimeSec}"
-                echo "✅ SUCCESS – counted in DORA"
-            }
         }
 
         failure {
