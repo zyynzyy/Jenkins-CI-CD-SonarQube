@@ -1,10 +1,6 @@
 pipeline {
     agent any
 
-    environment {
-        PIPELINE_START = "${System.currentTimeMillis()}"
-    }
-
     stages {
 
         stage('Checkout') {
@@ -28,12 +24,13 @@ pipeline {
             steps {
                 script {
                     def scannerHome = tool 'sonar-scanner'
-                    withSonarQubeEnv('sonar-scanner') {
+
+                    withSonarQubeEnv('sonarcloud') {
                         sh """
                           ${scannerHome}/bin/sonar-scanner \
-                            -Dsonar.projectKey=zyynzyy_Jenkins-CI-CD-SonarQube \
-                            -Dsonar.organization=zyynzyy
-                            -Dsonar.sources=.
+                          -Dsonar.projectKey=zyynzyy_Jenkins-CI-CD-SonarQube \
+                          -Dsonar.organization=zyynzyy \
+                          -Dsonar.sources=.
                         """
                     }
                 }
@@ -42,7 +39,7 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
-                timeout(time: 5, unit: 'MINUTES') {
+                timeout(time: 10, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
             }
@@ -50,9 +47,6 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                script {
-                   DEPLOY_END = System.currentTimeMillis()
-                }
                 sh '''
                   sudo rm -rf /var/www/html/*
                   sudo cp -r build/* /var/www/html/
@@ -63,12 +57,11 @@ pipeline {
 
     post {
         success {
-            echo "Mantab"
-
+            echo "✅ PIPELINE SUCCESS"
         }
 
         failure {
-            echo "❌ FAILED – not counted in DORA"
+            echo "❌ PIPELINE FAILED"
         }
     }
 }
