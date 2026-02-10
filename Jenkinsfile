@@ -31,7 +31,7 @@ pipeline {
                     withSonarQubeEnv('sonarcloud') {
                         sh """
                           ${scannerHome}/bin/sonar-scanner \
-                            -Dsonar.projectKey=ISI_PROJECT_KEY \
+                            -Dsonar.projectKey=zyynzyy_Jenkins-CI-CD-SonarQube \
                             -Dsonar.organization=zyynzyy
                             -Dsonar.sources=.
                         """
