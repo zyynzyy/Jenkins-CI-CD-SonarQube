@@ -28,7 +28,7 @@ pipeline {
             steps {
                 script {
                     def scannerHome = tool 'sonar-scanner'
-                    withSonarQubeEnv('sonarcloud') {
+                    withSonarQubeEnv('sonar-scanner') {
                         sh """
                           ${scannerHome}/bin/sonar-scanner \
                             -Dsonar.projectKey=zyynzyy_Jenkins-CI-CD-SonarQube \
