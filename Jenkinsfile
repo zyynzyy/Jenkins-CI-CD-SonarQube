@@ -11,7 +11,7 @@ pipeline {
 
         stage('Build') {
             steps {
-                echo "🔧 Build stage"
+                echo " Build stage"
                 sh '''
                   rm -rf build
                   mkdir -p build
@@ -57,11 +57,11 @@ pipeline {
 
     post {
         success {
-            echo "✅ PIPELINE SUCCESS"
+            echo "PIPELINE SUCCESS"
         }
 
         failure {
-            echo "❌ PIPELINE FAILED"
+            echo "PIPELINE FAILED"
         }
     }
 }
