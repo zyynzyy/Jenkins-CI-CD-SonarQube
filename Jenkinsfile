@@ -10,8 +10,10 @@ pipeline {
         APP_DIR = '/var/www/dora-site'
         DORA_LOG = '/var/lib/jenkins/dora-metrics/deployments.csv'
         DORA_WINDOW_DAYS = '30'
+
         SONAR_PROJECT_KEY = 'zyynzyy_Jenkins-CI-CD-SonarQube'
         SONAR_ORG = 'zyynzyy'
+        SONAR_TOKEN = credentials('sonar-token')
     }
 
     stages {
@@ -46,7 +48,7 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
+        stage('SonarCloud Analysis') {
             steps {
                 script {
                     def scannerHome = tool 'sonar-scanner'
@@ -56,17 +58,35 @@ pipeline {
                             ${scannerHome}/bin/sonar-scanner \
                               -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
                               -Dsonar.organization=${SONAR_ORG} \
-                              -Dsonar.sources=.
+                              -Dsonar.sources=. \
+                              -Dsonar.host.url=https://sonarcloud.io \
+                              -Dsonar.login=${SONAR_TOKEN}
                         """
                     }
                 }
             }
         }
 
-        stage('Quality Gate') {
+        stage('Quality Gate (Manual - SonarCloud API)') {
             steps {
-                timeout(time: 10, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                script {
+                    echo "Menunggu hasil analisis SonarCloud..."
+                    sleep 10
+
+                    def status = sh(
+                        script: """
+                            curl -s -u ${SONAR_TOKEN}: \
+                            "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}" \
+                            | grep -o '"status":"[^"]*"' | cut -d':' -f2 | tr -d '"'
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    echo "Quality Gate Status: ${status}"
+
+                    if (status != "OK") {
+                        error "Quality Gate FAILED!"
+                    }
                 }
             }
         }
@@ -120,13 +140,11 @@ pipeline {
 
                     def dfPerDay = deployCount / env.DORA_WINDOW_DAYS.toInteger().toDouble()
 
-                    // simpan ke env supaya bisa dipakai di POST
                     env.DORA_LT_SECONDS = ltSeconds.toString()
                     env.DORA_LT_MINUTES = String.format('%.2f', ltMinutes)
                     env.DORA_DF_COUNT = deployCount.toString()
                     env.DORA_DF_PER_DAY = String.format('%.4f', dfPerDay)
 
-                    // simpan JSON untuk penelitian
                     writeFile file: 'dora-metrics.json', text: groovy.json.JsonOutput.prettyPrint(
                         groovy.json.JsonOutput.toJson([
                             buildNumber: env.BUILD_NUMBER,
@@ -140,12 +158,7 @@ pipeline {
 
                     archiveArtifacts artifacts: 'dora-metrics.json', fingerprint: true
 
-                    // tampilkan di UI Jenkins
                     currentBuild.description = "LT=${env.DORA_LT_MINUTES} min | DF30=${env.DORA_DF_COUNT}"
-
-                    echo "DORA sementara:"
-                    echo "LT = ${env.DORA_LT_MINUTES} menit"
-                    echo "DF = ${env.DORA_DF_COUNT} deploy / 30 hari"
                 }
             }
         }
@@ -165,7 +178,9 @@ pipeline {
 
         failure {
             echo "PIPELINE FAILED"
-            echo "DORA metrics tidak dihitung karena pipeline gagal"
+            echo "Kemungkinan penyebab:"
+            echo "- Quality Gate gagal"
+            echo "- SonarCloud belum selesai analisis"
         }
 
         always {
