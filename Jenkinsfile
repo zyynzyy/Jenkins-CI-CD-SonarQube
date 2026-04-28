@@ -1,4 +1,4 @@
-pipeline {
+pipeline { 
     agent any
 
     options {
@@ -15,7 +15,6 @@ pipeline {
         SONAR_ORG = 'zyynzyy'
         SONAR_TOKEN = credentials('sonar-token')
 
-        // Tambahan
         SONAR_QG_STATUS = 'UNKNOWN'
     }
 
@@ -57,14 +56,14 @@ pipeline {
                     def scannerHome = tool 'sonar-scanner'
 
                     withSonarQubeEnv('sonarcloud') {
-                        sh """
-                            ${scannerHome}/bin/sonar-scanner \
-                              -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
-                              -Dsonar.organization=${SONAR_ORG} \
+                        sh '''
+                            '"${scannerHome}"'/bin/sonar-scanner \
+                              -Dsonar.projectKey=$SONAR_PROJECT_KEY \
+                              -Dsonar.organization=$SONAR_ORG \
                               -Dsonar.sources=. \
                               -Dsonar.host.url=https://sonarcloud.io \
-                              -Dsonar.login=${SONAR_TOKEN}
-                        """
+                              -Dsonar.token=$SONAR_TOKEN
+                        '''
                     }
                 }
             }
@@ -77,16 +76,15 @@ pipeline {
 
                     def status = "UNKNOWN"
 
-                    // retry sampai 3x (biar ga kena processing)
                     for (int i = 0; i < 3; i++) {
                         sleep 15
 
                         status = sh(
-                            script: """
-                                curl -s -u ${SONAR_TOKEN}: \
-                                "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}" \
+                            script: '''
+                                curl -s -u $SONAR_TOKEN: \
+                                "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$SONAR_PROJECT_KEY" \
                                 | grep -o '"status":"[^"]*"' | head -1 | cut -d':' -f2 | tr -d '"'
-                            """,
+                            ''',
                             returnStdout: true
                         ).trim()
 
@@ -100,7 +98,7 @@ pipeline {
                     echo "Quality Gate Final Status: ${status}"
 
                     if (status != "OK") {
-                        echo "⚠️ Quality Gate FAILED (tidak memblok deploy - research mode)"
+                        echo "⚠️ Quality Gate FAILED (non-blocking)"
                     } else {
                         echo "✅ Quality Gate PASSED"
                     }
@@ -122,57 +120,58 @@ pipeline {
         stage('DORA Metrics') {
             steps {
                 script {
-                    def deployEndEpoch = sh(script: "date +%s", returnStdout: true).trim().toInteger()
-                    def commitEpoch = env.GIT_COMMIT_EPOCH.toInteger()
 
-                    def ltSeconds = deployEndEpoch - commitEpoch
-                    def ltMinutes = ltSeconds / 60.0
+                    sh '''
+                        DEPLOY_EPOCH=$(date +%s)
+                        COMMIT_EPOCH=$GIT_COMMIT_EPOCH
 
-                    def deployStatus = (env.SONAR_QG_STATUS == "OK") ? "SUCCESS" : "SUCCESS_WITH_ISSUES"
+                        LT_SECONDS=$((DEPLOY_EPOCH - COMMIT_EPOCH))
 
-                    sh """
-                        mkdir -p \$(dirname "$DORA_LOG")
-                        if [ ! -f "$DORA_LOG" ]; then
-                          echo "build_number,commit,commit_epoch,deploy_epoch,lt_seconds,status,qg_status" > "$DORA_LOG"
+                        if [ "$SONAR_QG_STATUS" = "OK" ]; then
+                            STATUS="SUCCESS"
+                        else
+                            STATUS="SUCCESS_WITH_ISSUES"
                         fi
 
-                        printf '%s,%s,%s,%s,%s,%s,%s\\n' \
-                          '${env.BUILD_NUMBER}' \
-                          '${env.GIT_COMMIT_SHORT}' \
-                          '${env.GIT_COMMIT_EPOCH}' \
-                          '${deployEndEpoch}' \
-                          '${ltSeconds}' \
-                          '${deployStatus}' \
-                          '${env.SONAR_QG_STATUS}' >> "$DORA_LOG"
-                    """
+                        mkdir -p $(dirname "$DORA_LOG")
 
-                    def windowStart = deployEndEpoch - (env.DORA_WINDOW_DAYS.toInteger() * 24 * 3600)
+                        if [ ! -f "$DORA_LOG" ]; then
+                            echo "build_number,commit,commit_epoch,deploy_epoch,lt_seconds,status,qg_status" > "$DORA_LOG"
+                        fi
 
-                    def deployCount = sh(
-                        script: """
-                            awk -F',' -v ws=${windowStart} '
-                                NR > 1 && \$4 >= ws && \$6 ~ /^SUCCESS/ { c++ }
-                                END { print c+0 }
-                            ' "$DORA_LOG"
-                        """,
-                        returnStdout: true
-                    ).trim().toInteger()
+                        echo "$BUILD_NUMBER,$GIT_COMMIT_SHORT,$COMMIT_EPOCH,$DEPLOY_EPOCH,$LT_SECONDS,$STATUS,$SONAR_QG_STATUS" >> "$DORA_LOG"
 
-                    def dfPerDay = deployCount / env.DORA_WINDOW_DAYS.toInteger().toDouble()
+                        WINDOW_START=$(date -d "$DORA_WINDOW_DAYS days ago" +%s)
 
-                    env.DORA_LT_SECONDS = ltSeconds.toString()
-                    env.DORA_LT_MINUTES = String.format('%.2f', ltMinutes)
-                    env.DORA_DF_COUNT = deployCount.toString()
-                    env.DORA_DF_PER_DAY = String.format('%.4f', dfPerDay)
+                        DEPLOY_COUNT=$(awk -F',' -v ws=$WINDOW_START '
+                            NR > 1 && $4 >= ws && $6 ~ /^SUCCESS/ { c++ }
+                            END { print c+0 }
+                        ' "$DORA_LOG")
+
+                        DF_PER_DAY=$(awk -v c=$DEPLOY_COUNT -v d=$DORA_WINDOW_DAYS 'BEGIN { printf "%.4f", c/d }')
+                        LT_MINUTES=$(awk -v s=$LT_SECONDS 'BEGIN { printf "%.2f", s/60 }')
+
+                        echo "LT_SECONDS=$LT_SECONDS" > dora.env
+                        echo "LT_MINUTES=$LT_MINUTES" >> dora.env
+                        echo "DEPLOY_COUNT=$DEPLOY_COUNT" >> dora.env
+                        echo "DF_PER_DAY=$DF_PER_DAY" >> dora.env
+                    '''
+
+                    def props = readProperties file: 'dora.env'
+
+                    env.DORA_LT_SECONDS = props.LT_SECONDS
+                    env.DORA_LT_MINUTES = props.LT_MINUTES
+                    env.DORA_DF_COUNT = props.DEPLOY_COUNT
+                    env.DORA_DF_PER_DAY = props.DF_PER_DAY
 
                     writeFile file: 'dora-metrics.json', text: groovy.json.JsonOutput.prettyPrint(
                         groovy.json.JsonOutput.toJson([
                             buildNumber: env.BUILD_NUMBER,
                             commit: env.GIT_COMMIT_SHORT,
-                            leadTimeSeconds: ltSeconds,
-                            leadTimeMinutes: ltMinutes,
-                            deployCountLast30Days: deployCount,
-                            deployFrequencyPerDay: dfPerDay,
+                            leadTimeSeconds: env.DORA_LT_SECONDS,
+                            leadTimeMinutes: env.DORA_LT_MINUTES,
+                            deployCountLast30Days: env.DORA_DF_COUNT,
+                            deployFrequencyPerDay: env.DORA_DF_PER_DAY,
                             qualityGate: env.SONAR_QG_STATUS
                         ])
                     )
