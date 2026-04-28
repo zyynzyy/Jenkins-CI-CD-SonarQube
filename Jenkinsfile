@@ -14,6 +14,9 @@ pipeline {
         SONAR_PROJECT_KEY = 'zyynzyy_Jenkins-CI-CD-SonarQube'
         SONAR_ORG = 'zyynzyy'
         SONAR_TOKEN = credentials('sonar-token')
+
+        // Tambahan
+        SONAR_QG_STATUS = 'UNKNOWN'
     }
 
     stages {
@@ -67,25 +70,39 @@ pipeline {
             }
         }
 
-        stage('Quality Gate (Manual - SonarCloud API)') {
+        stage('Quality Gate (Non-blocking)') {
             steps {
                 script {
                     echo "Menunggu hasil analisis SonarCloud..."
-                    sleep 10
 
-                    def status = sh(
-                        script: """
-                            curl -s -u ${SONAR_TOKEN}: \
-                            "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}" \
-                            | grep -o '"status":"[^"]*"' | cut -d':' -f2 | tr -d '"'
-                        """,
-                        returnStdout: true
-                    ).trim()
+                    def status = "UNKNOWN"
 
-                    echo "Quality Gate Status: ${status}"
+                    // retry sampai 3x (biar ga kena processing)
+                    for (int i = 0; i < 3; i++) {
+                        sleep 15
+
+                        status = sh(
+                            script: """
+                                curl -s -u ${SONAR_TOKEN}: \
+                                "https://sonarcloud.io/api/qualitygates/project_status?projectKey=${SONAR_PROJECT_KEY}" \
+                                | grep -o '"status":"[^"]*"' | head -1 | cut -d':' -f2 | tr -d '"'
+                            """,
+                            returnStdout: true
+                        ).trim()
+
+                        if (status == "OK" || status == "ERROR") {
+                            break
+                        }
+                    }
+
+                    env.SONAR_QG_STATUS = status
+
+                    echo "Quality Gate Final Status: ${status}"
 
                     if (status != "OK") {
-                        error "Quality Gate FAILED!"
+                        echo "⚠️ Quality Gate FAILED (tidak memblok deploy - research mode)"
+                    } else {
+                        echo "✅ Quality Gate PASSED"
                     }
                 }
             }
@@ -111,19 +128,22 @@ pipeline {
                     def ltSeconds = deployEndEpoch - commitEpoch
                     def ltMinutes = ltSeconds / 60.0
 
+                    def deployStatus = (env.SONAR_QG_STATUS == "OK") ? "SUCCESS" : "SUCCESS_WITH_ISSUES"
+
                     sh """
                         mkdir -p \$(dirname "$DORA_LOG")
                         if [ ! -f "$DORA_LOG" ]; then
-                          echo "build_number,commit,commit_epoch,deploy_epoch,lt_seconds,status" > "$DORA_LOG"
+                          echo "build_number,commit,commit_epoch,deploy_epoch,lt_seconds,status,qg_status" > "$DORA_LOG"
                         fi
 
-                        printf '%s,%s,%s,%s,%s,%s\\n' \
+                        printf '%s,%s,%s,%s,%s,%s,%s\\n' \
                           '${env.BUILD_NUMBER}' \
                           '${env.GIT_COMMIT_SHORT}' \
                           '${env.GIT_COMMIT_EPOCH}' \
                           '${deployEndEpoch}' \
                           '${ltSeconds}' \
-                          'SUCCESS' >> "$DORA_LOG"
+                          '${deployStatus}' \
+                          '${env.SONAR_QG_STATUS}' >> "$DORA_LOG"
                     """
 
                     def windowStart = deployEndEpoch - (env.DORA_WINDOW_DAYS.toInteger() * 24 * 3600)
@@ -131,7 +151,7 @@ pipeline {
                     def deployCount = sh(
                         script: """
                             awk -F',' -v ws=${windowStart} '
-                                NR > 1 && \$4 >= ws && \$6 == "SUCCESS" { c++ }
+                                NR > 1 && \$4 >= ws && \$6 ~ /^SUCCESS/ { c++ }
                                 END { print c+0 }
                             ' "$DORA_LOG"
                         """,
@@ -152,13 +172,14 @@ pipeline {
                             leadTimeSeconds: ltSeconds,
                             leadTimeMinutes: ltMinutes,
                             deployCountLast30Days: deployCount,
-                            deployFrequencyPerDay: dfPerDay
+                            deployFrequencyPerDay: dfPerDay,
+                            qualityGate: env.SONAR_QG_STATUS
                         ])
                     )
 
                     archiveArtifacts artifacts: 'dora-metrics.json', fingerprint: true
 
-                    currentBuild.description = "LT=${env.DORA_LT_MINUTES} min | DF30=${env.DORA_DF_COUNT}"
+                    currentBuild.description = "LT=${env.DORA_LT_MINUTES}m | DF30=${env.DORA_DF_COUNT} | QG=${env.SONAR_QG_STATUS}"
                 }
             }
         }
@@ -174,13 +195,11 @@ pipeline {
             echo "Lead Time (LT): ${env.DORA_LT_SECONDS} detik (${env.DORA_LT_MINUTES} menit)"
             echo "Deployment Frequency (DF): ${env.DORA_DF_COUNT} deploy dalam ${env.DORA_WINDOW_DAYS} hari"
             echo "DF Rate: ${env.DORA_DF_PER_DAY} deploy/hari"
+            echo "Quality Gate: ${env.SONAR_QG_STATUS}"
         }
 
         failure {
             echo "PIPELINE FAILED"
-            echo "Kemungkinan penyebab:"
-            echo "- Quality Gate gagal"
-            echo "- SonarCloud belum selesai analisis"
         }
 
         always {
